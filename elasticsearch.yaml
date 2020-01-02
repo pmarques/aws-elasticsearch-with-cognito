@@ -1,0 +1,410 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS ElasticSearch with cognito RBAC
+
+Parameters:
+  EnvName:
+    Type: String
+    Default: "dev"
+    Description: Environment Name
+  DomainName:
+    Description: A name for the Amazon ES domain.
+    Type: String
+    Default: "moj-es"
+  EBSEnabled:
+    Description: EBS Enabled
+    Type: String
+    AllowedValues: [true, false]
+    Default: "true"
+  EBSVolumeSize:
+    Description: EBS volume size
+    Type: Number
+    Default: "20"
+  EBSVolumeType:
+    Description: EBS Volume type
+    Type: String
+    Default: "gp2"
+  ClusterInstanceCount:
+    Description: 'The number of data nodes (instances) to use in the Amazon ES domain.'
+    Type: Number
+    Default: "1"
+  ClusterInstanceType:
+    Description: 'The instance type for your data nodes.'
+    Type: 'String'
+    Default: "m4.large.elasticsearch"
+  DedicatedMasterCount:
+    Description: 'The number of dedicated master nodes (instances) to use in the Amazon ES domain (set to 0 to disable dedicated master nodes).'
+    Type: Number
+    Default: "0"
+  DedicatedMasterType:
+    Description: 'The instance type for your dedicated master nodes.'
+    Type: 'String'
+    Default: "m4.large.elasticsearch"
+  Encryption:
+    Description: 'Enable server side encryption using KMS (customer managed) CMK. Only works with certain instance types (https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/aes-supported-instance-types.html)'
+    Type: String
+    Default: "false"
+    AllowedValues: [true, false]
+  EncryptionKey:
+    Description: 'KMS key id'
+    Type: String
+
+Conditions:
+  HasSingleClusterInstance: !Equals [!Ref ClusterInstanceCount, '1']
+  HasDedicatedMasterNodes: !Not [!Equals [!Ref DedicatedMasterCount, 0]]
+  HasEncryption: !Equals [!Ref Encryption, true]
+
+Resources:
+  AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+
+  AdminPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AdminPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Resource:
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/*/*
+            Action:
+              - es:*
+            Effect: Allow
+      Roles:
+        - !Ref AdminRole
+
+  AdminCognitoGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: AdminGroup
+      RoleArn: !GetAtt AdminRole.Arn
+      UserPoolId: !Ref UserPool
+
+  # IAM Policies & Roles
+  ProjectARole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+
+  ProjectBRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+
+  ProjectAPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: ProjectAPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowReadOnlyIndexes
+            Resource:
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/*
+            Action:
+              - es:ESHttpGet
+            Effect: Allow
+          - Sid: AllowKibanaReadWrite
+            Resource:
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/favicon.ico
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/_*
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/.*
+            Action:
+              - es:*
+            Effect: Allow
+      Roles:
+        - !Ref ProjectARole
+
+  ProjectBPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: ProjectBPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AllowReadOnlyIndexes
+            Resource:
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/*
+            Action:
+              - es:ESHttpGet
+            Effect: Allow
+          - Sid: AllowKibanaReadWrite
+            Resource:
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/favicon.ico
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_*
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/.*
+            Action:
+              - es:*
+            Effect: Allow
+      Roles:
+        - !Ref ProjectBRole
+
+  ProjectACognitoGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: ProjectAGroup
+      RoleArn: !GetAtt ProjectARole.Arn
+      UserPoolId: !Ref UserPool
+
+  ProjectBCognitoGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: ProjectBGroup
+      RoleArn: !GetAtt ProjectBRole.Arn
+      UserPoolId: !Ref UserPool
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: espool-user-pool
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: espooldemo
+      UserPoolId: !Ref UserPool
+
+  # Creates a federeated Identity pool
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: espoolIdentity
+      AllowUnauthenticatedIdentities: true
+
+  # Create a role for unauthorized acces to AWS resources. Very limited access. Only allows users in the previously created Identity Pool
+  CognitoUnAuthorizedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+      Policies:
+        - PolicyName: "CognitoUnauthorizedPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "mobileanalytics:PutEvents"
+                  - "cognito-sync:*"
+                Resource: "*"
+
+  # Create a role for authorized acces to AWS resources. Control what your user can access. This example only allows Lambda invokation
+  # Only allows users in the previously created Identity Pool
+  CognitoAuthorizedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action:
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: "CognitoAuthorizedPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "mobileanalytics:PutEvents"
+                  - "cognito-sync:*"
+                  - "cognito-identity:*"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"
+
+  IdentityPoolRoleMapping:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt CognitoAuthorizedRole.Arn
+        unauthenticated: !GetAtt CognitoUnAuthorizedRole.Arn
+      # RoleMappings:
+      #   espool-proj-a:
+      #     AmbiguousRoleResolution: Deny
+      #     # TODO: how to get app ID :S
+      #     IdentityProvider: !Sub cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}:7hal65ju83322m25brqjlkfge0
+      #     Type: Token
+      #   espool-proj-b:
+      #     AmbiguousRoleResolution: Deny
+      #     # TODO: how to get app ID :S
+      #     IdentityProvider: !Sub cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}:4ori861ojg6ugviuluugj5vut6
+      #     Type: Token
+
+  ESCognitoRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: es.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonESCognitoAccess
+
+  ElasticsearchPrjectA:
+    Type: 'AWS::Elasticsearch::Domain'
+    Properties:
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyNotUserOrRole
+            Effect: Deny
+            Principal: "*"
+            Action: es:*
+            Resource: !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/essecurity/*
+            Condition:
+              StringNotEquals:
+                aws:principaltype:
+                  User
+                  AssumedRole
+                  Account
+          - Sid: DenyRoleNotSrcsys
+            Effect: Deny
+            Principal: "*"
+            Action: es:*
+            Resource: !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/essecurity/*
+            Condition:
+              StringEquals:
+                aws:principaltype:
+                  AssumedRole
+                  Account
+              StringNotLike:
+                aws:userId:
+                  AROAJ7TXT2VWE3XJQD4FI:*
+                  AROAJQLM3ET4463VPJ3UC:*
+                  AROAITX6R5JG7CYUUCH46:*
+      CognitoOptions:
+        Enabled: true
+        IdentityPoolId: !Ref IdentityPool
+        RoleArn: !GetAtt ESCognitoRole.Arn
+        UserPoolId: !Ref UserPool
+      DomainName: !Sub ${DomainName}-proj-a
+      EBSOptions:
+        EBSEnabled: !Ref EBSEnabled
+        VolumeSize: !Ref EBSVolumeSize
+        VolumeType: !Ref EBSVolumeType
+      ElasticsearchClusterConfig:
+        DedicatedMasterCount: !If [HasDedicatedMasterNodes, !Ref DedicatedMasterCount, !Ref 'AWS::NoValue']
+        DedicatedMasterEnabled: !If [HasDedicatedMasterNodes, true, false]
+        DedicatedMasterType: !If [HasDedicatedMasterNodes, !Ref DedicatedMasterType, !Ref 'AWS::NoValue']
+        InstanceCount: !Ref ClusterInstanceCount
+        InstanceType: !Ref ClusterInstanceType
+        ZoneAwarenessEnabled: !If [HasSingleClusterInstance, false, true]
+      ElasticsearchVersion: '7.1'
+      EncryptionAtRestOptions: !If [HasEncryption, {Enabled: true, KmsKeyId: !Ref EncryptionKey}, !Ref 'AWS::NoValue']
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: 10
+      AdvancedOptions:
+        rest.action.multi.allow_explicit_index: "true"
+        indices.fielddata.cache.size: ""
+
+  ElasticsearchPrjectB:
+    Type: 'AWS::Elasticsearch::Domain'
+    Properties:
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyNotUserOrRole
+            Effect: Deny
+            Principal: "*"
+            Action: es:*
+            Resource: !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/essecurity/*
+            Condition:
+              StringNotEquals:
+                aws:principaltype:
+                  User
+                  AssumedRole
+                  Account
+          - Sid: DenyRoleNotSrcsys
+            Effect: Deny
+            Principal: "*"
+            Action: es:*
+            Resource: !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/essecurity/*
+            Condition:
+              StringEquals:
+                aws:principaltype:
+                  AssumedRole
+                  Account
+              StringNotLike:
+                aws:userId:
+                  AROAJ7TXT2VWE3XJQD4FI:*
+                  AROAJQLM3ET4463VPJ3UC:*
+                  AROAITX6R5JG7CYUUCH46:*
+      CognitoOptions:
+        Enabled: true
+        IdentityPoolId: !Ref IdentityPool
+        RoleArn: !GetAtt ESCognitoRole.Arn
+        UserPoolId: !Ref UserPool
+      DomainName: !Sub ${DomainName}-proj-b
+      EBSOptions:
+        EBSEnabled: !Ref EBSEnabled
+        VolumeSize: !Ref EBSVolumeSize
+        VolumeType: !Ref EBSVolumeType
+      ElasticsearchClusterConfig:
+        DedicatedMasterCount: !If [HasDedicatedMasterNodes, !Ref DedicatedMasterCount, !Ref 'AWS::NoValue']
+        DedicatedMasterEnabled: !If [HasDedicatedMasterNodes, true, false]
+        DedicatedMasterType: !If [HasDedicatedMasterNodes, !Ref DedicatedMasterType, !Ref 'AWS::NoValue']
+        InstanceCount: !Ref ClusterInstanceCount
+        InstanceType: !Ref ClusterInstanceType
+        ZoneAwarenessEnabled: !If [HasSingleClusterInstance, false, true]
+      ElasticsearchVersion: '7.1'
+      EncryptionAtRestOptions: !If [HasEncryption, {Enabled: true, KmsKeyId: !Ref EncryptionKey}, !Ref 'AWS::NoValue']
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: 10
+      AdvancedOptions:
+        rest.action.multi.allow_explicit_index: "true"
+        indices.fielddata.cache.size: ""
+
+Outputs:
+  KibanaProjectA:
+    Description: Project A Kibana URL
+    Value: !Join ["", ["https://", !GetAtt ElasticsearchPrjectA.DomainEndpoint, "/_plugin/kibana/"]]
+
+  KibanaProjectB:
+    Description: Project B Kibana URL
+    Value: !Join ["", ["https://", !GetAtt ElasticsearchPrjectB.DomainEndpoint, "/_plugin/kibana/"]]
