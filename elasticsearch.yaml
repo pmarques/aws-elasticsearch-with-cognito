@@ -1,6 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: AWS ElasticSearch with cognito RBAC
 
+Transform: AWS::Serverless-2016-10-31
+
 Parameters:
   EnvName:
     Type: String
@@ -261,17 +263,76 @@ Resources:
       Roles:
         authenticated: !GetAtt CognitoAuthorizedRole.Arn
         unauthenticated: !GetAtt CognitoUnAuthorizedRole.Arn
-      # RoleMappings:
-      #   espool-proj-a:
-      #     AmbiguousRoleResolution: Deny
-      #     # TODO: how to get app ID :S
-      #     IdentityProvider: !Sub cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}:7hal65ju83322m25brqjlkfge0
-      #     Type: Token
-      #   espool-proj-b:
-      #     AmbiguousRoleResolution: Deny
-      #     # TODO: how to get app ID :S
-      #     IdentityProvider: !Sub cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}:4ori861ojg6ugviuluugj5vut6
-      #     Type: Token
+
+  IdentityPoolRoleMappingUpdate:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs12.x
+      # NOTE: This is completly open for the sake of a demo
+      Policies:
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action: "*"
+              Resource: "*"
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        const CognitoIdentity = new AWS.CognitoIdentity({apiVersion: '2014-06-30'});
+        const response = require('cfn-response');
+
+        exports.handler = (event, context, callback) => {
+          console.log(event);
+          console.log(context);
+
+          if ('Delete' === event.RequestType) {
+            return response.send(event, context, response.SUCCESS, { message: 'Ignore Delete Requests!' });
+          }
+
+          const { IdentityPoolId } = event.ResourceProperties;
+
+          CognitoIdentity.describeIdentityPool({
+            IdentityPoolId: IdentityPoolId
+          }, (err, data) => {
+            // console.log(err, data);
+            if (err) return response.send(event, context, response.FAILED, {err: err});
+
+            const RoleMappings = data.CognitoIdentityProviders.reduce((obj, provider) => {
+              obj[`${provider.ProviderName}:${provider.ClientId}`] = {
+                  AmbiguousRoleResolution: 'Deny',
+                  Type: 'Token',
+              };
+              return obj;
+            }, {})
+
+            CognitoIdentity.getIdentityPoolRoles({
+              IdentityPoolId: IdentityPoolId,
+            }, function(err, data) {
+              // console.log(err, data);
+              if (err) return response.send(event, context, response.FAILED, {err: err});
+
+              CognitoIdentity.setIdentityPoolRoles({
+                IdentityPoolId: IdentityPoolId,
+                Roles: data.Roles,
+                RoleMappings: RoleMappings,
+              }, function(err, data) {
+                // console.log(err, data);
+                if (err) return response.send(event, context, response.FAILED, {err: err});
+
+                response.send(event, context, response.SUCCESS, { message: 'Indentity Pools for AWS ES Updated!' });
+              });
+            });
+          });
+        };
+
+  IdentityPoolRoleMappingUpdateRun:
+    Type: Custom::IdentityPoolRoleMapping
+    DependsOn:
+      - ElasticsearchPrjectA
+      - ElasticsearchPrjectB
+    Properties:
+      ServiceToken: !GetAtt IdentityPoolRoleMappingUpdate.Arn
+      IdentityPoolId: !Ref IdentityPool
 
   ESCognitoRole:
     Type: AWS::IAM::Role
