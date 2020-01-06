@@ -119,6 +119,12 @@ Resources:
       PolicyDocument:
         Version: 2012-10-17
         Statement:
+          - Sid: DenySpecialRequests
+            Resource:
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/_bulk
+            Action:
+              - es:*
+            Effect: Deny
           - Sid: AllowReadOnlyIndexes
             Resource:
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/*
@@ -144,6 +150,12 @@ Resources:
       PolicyDocument:
         Version: 2012-10-17
         Statement:
+          - Sid: DenySpecialRequests
+            Resource:
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_bulk
+            Action:
+              - es:*
+            Effect: Deny
           - Sid: AllowReadOnlyIndexes
             Resource:
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/*

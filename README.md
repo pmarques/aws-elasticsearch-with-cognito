@@ -43,3 +43,9 @@ This means that ES HTTP Request with index on the query itself (HTTP data) can b
 There is a way to configure ES only allow requests with explicit index in the URL Path, although this breaks Kibana and possible the apps.
 
 * AWS ES Service doesn't support cross cluster search
+
+* \_bulk ES REST API can be used as a back door for write requests
+
+To block it we can add a Deny statement for the \_bulk requests.
+
+Other APIs would need to be evaluated to check other possible issues
