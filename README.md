@@ -3,11 +3,8 @@
 This is compact solution / template to show how you can configure AWS Elasticsearch with cognito and apply some restrictions.
 
 1. Create a CloudFormation Stack with elastisearch.yaml
-2. Uncomment the **RoleMappings** in **AWS::Cognito::IdentityPoolRoleAttachment**
-> You also need to update the App IDs in the *IdentityProvider*
-3. Update the CloudFormation Stack
-4. Create users in the AWS Cognito User Pool console and assign on of the groups
-5. Access the kibana, you can find the URL in the Outputs of the CloudFormation Stack
+2. Create users in the AWS Cognito User Pool console and assign on of the groups
+3. Access the kibana, you can find the URL in the Outputs of the CloudFormation Stack
 
 ## Tests
 
