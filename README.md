@@ -35,17 +35,52 @@ GET twitter/_doc/1
 
 ## Findings
 
+Before discussing the issues, keep in mind ES works like this:
+
+* ES has REST API and basic actions are CRUD (Create, Read, Update and Delete)
+* ES also allows "less CRUD APIs" (at least purists would say that) and by that I mean: they allow multi search and bulk operations where the index can be specified on the HTTP request Body
+
 At the time, 6th of January 2020:
 
-* AWS ES service only allows you to control access to ES indexes based on the URL path.
+* AWS ES as Cognito integration only allows, as far as I know, to block requests based on Path. That prevents someone to read, modify or create a document using the Document "CRUD" API.
+* Requests with the index in the HTTP Body bypass Cognito IAM Policy, there is a way to disable this ni the ES, although if we do that kibana stops working because loads of things are apparently based on multi search.
+* Since multi search is required for Kibana we can't disable `_msearch`
+* `_bulk` ES REST API can be used as a _"hack"_ for write requests
 
-This means that ES HTTP Request with index on the query itself (HTTP data) can bypass the IAM Polices.
-There is a way to configure ES only allow requests with explicit index in the URL Path, although this breaks Kibana and possible the apps.
-
-* AWS ES Service doesn't support cross cluster search
-
-* \_bulk ES REST API can be used as a back door for write requests
-
-To block it we can add a Deny statement for the \_bulk requests.
+To block it we can add a Deny statement for the `_bulk` requests.
 
 Other APIs would need to be evaluated to check other possible issues
+
+* I'm not entirely sure about the current implementation of beats and logstash, but they were using bulk request to index the logs and metrics which means that if we block this on ES we would probably break the log ingestion.
+* We can block for instance _bulk in the Cognito IAM Policy although we need to evaluate all the APIs to make sure that other "hacks" can't be used to at leasts edit the data
+
+Also:
+
+* AWS ES seems to white list the ES API, so explicit Denies in the IAM Policies are required to block this _"hacks"_
+* AWS ES Service doesn't support cross cluster search so we can segregate data per AWS ES Domain.
+
+**NOTE:** The CloudFormation template has a explicit Deny to block `_bulk` requests, you can remove that and test this in the Kibana Dev Tools:
+
+Bypass write permissions with `_bulk` (no index in the HTTP path):
+
+```
+POST _bulk
+{ "index" : { "_index" : "test", "_id" : "1" } }
+{ "field1" : "value1" }
+```
+
+Test block multi-search when using the index in the HTTP Path:
+
+```
+GET test/_msearch
+{}
+{"query" : {"match_all" : {}}, "from" : 0, "size" : 10}
+```
+
+Bypass read permissions with `_msearch` (no index in the HTTP path):
+
+```
+GET _msearch
+{"index" : "test"}
+{"query" : {"match_all" : {}}}
+```
