@@ -1,17 +1,20 @@
 # AWS Managed Elasticsearch with Cognito RBAC
 
-This is compact solution / template to show how you can configure AWS Elasticsearch with cognito and apply some restrictions.
+This is compact solution / template to show how you can configure AWS Elasticsearch with AWS Cognito and apply some restrictions.
 
-1. Create a CloudFormation Stack with elastisearch.yaml
-2. Create users in the AWS Cognito User Pool console and assign on of the groups
-3. Access the kibana, you can find the URL in the Outputs of the CloudFormation Stack
+1. Create a CloudFormation Stack with elastisearch.yaml template (You can use the all the default settings but don't forget to tick the boxes in the bootem of the last step: `Capabilities and transforms`)
+2. Create users in the AWS Cognito User Pool console and assign one of the groups (Note: don't assign more than one group to a user or it will get access denied)
+3. Access the Kibana, you can find the URL in the Outputs of the CloudFormation Stack
 
 ## Tests
 
 Using Kibana Dev Tools:
 
+![picture](images/kibana_devtools.jpg)
+
 ### Admin
-Only users in the **Admin** group can create docs:
+
+Only users in the **Admin** group can create docs, if you try this with a user in another group it should fail.
 
 ```
 PUT twitter/_doc/1
@@ -24,10 +27,10 @@ PUT twitter/_doc/1
 
 ### Developers
 
-Users in other groups can only read docs in their projects:
+Users in other groups can only read docs in their projects (current policy allows any index):
 
-* **ProjectAGroup** can readon from **-proj-a** cluster
-* **ProjectBGroup** can readon from **-proj-b** cluster
+* **ProjectAGroup** can read from **-proj-a** cluster
+* **ProjectBGroup** can read from **-proj-b** cluster
 
 ```
 GET twitter/_doc/1
@@ -35,52 +38,44 @@ GET twitter/_doc/1
 
 ## Findings
 
-Before discussing the issues, keep in mind ES works like this:
+Before discussing the findings, keep in mind Elasticsearch works like this:
 
-* ES has REST API and basic actions are CRUD (Create, Read, Update and Delete)
-* ES also allows "less CRUD APIs" (at least purists would say that) and by that I mean: they allow multi search and bulk operations where the index can be specified on the HTTP request Body
+* ES has a REST API and basic actions are CRUD (Create, Read, Update and Delete).
+* ES also allows "less CRUD APIs" (at least purists would say that) and by that I mean: they allow multisearch and bulk operations where the index can be specified on the HTTP request Body instead of in the HTTP request Path.
 
 At the time, 6th of January 2020:
 
-* AWS ES as Cognito integration only allows, as far as I know, to block requests based on Path. That prevents someone to read, modify or create a document using the Document "CRUD" API.
-* Requests with the index in the HTTP Body bypass Cognito IAM Policy, there is a way to disable this ni the ES, although if we do that kibana stops working because loads of things are apparently based on multi search.
-* Since multi search is required for Kibana we can't disable `_msearch`
-* `_bulk` ES REST API can be used as a _"hack"_ for write requests
+* AWS ES IAM Policies only allow us, as far as I know, to block requests based on the HTTP Path. That prevents someone to read, modify or create a document using the Document "CRUD" API.
+* Requests with the index in the HTTP Body bypass the IAM Policies, there is a way to disable this in the ES, although if we do that Kibana stops working because loads of operations are apparently using ES multisearch.
+* Since multisearch is required for Kibana we can't disable `_msearch`.
+* `_bulk` ES REST API can be used as a _"hack"_ for write requests.
 
-To block it we can add a Deny statement for the `_bulk` requests.
-
-Other APIs would need to be evaluated to check other possible issues
+To block it, we can add a Deny statement for the `_bulk` requests (check IAM Policies for Project A in the CloudFormation template elastisearch.yaml)
 
 * I'm not entirely sure about the current implementation of beats and logstash, but they were using bulk request to index the logs and metrics which means that if we block this on ES we would probably break the log ingestion.
-* We can block for instance _bulk in the Cognito IAM Policy although we need to evaluate all the APIs to make sure that other "hacks" can't be used to at leasts edit the data
+* We can block for instance _bulk in the Cognito IAM Policy although we need to evaluate all the APIs to make sure that other "hacks" can't be used for at leasts to edit the data.
 
 Also:
 
-* AWS ES seems to white list the ES API, so explicit Denies in the IAM Policies are required to block this _"hacks"_
+* AWS ES seems to white list the ES API, so explicit Denies in the IAM Policies are required to block this _"hacks"_.
 * AWS ES Service doesn't support cross cluster search so we can segregate data per AWS ES Domain.
 
-**NOTE:** The CloudFormation template has a explicit Deny to block `_bulk` requests, you can remove that and test this in the Kibana Dev Tools:
+To show how you can bypass the IAM Polices, _Project B_ IAM Policy still allows `_bulk` requests. It also has a explicit **Deny** for a index named **twitter_blocked_index**
 
-Bypass write permissions with `_bulk` (no index in the HTTP path):
+Using _Kibana for Project B_ you can try the follow:
+
+1. Bypass write permissions with `_bulk` (no index in the HTTP path):
 
 ```
 POST _bulk
-{ "index" : { "_index" : "test", "_id" : "1" } }
+{ "index" : { "_index" : "twitter_blocked_index", "_id" : "1" } }
 { "field1" : "value1" }
 ```
 
-Test block multi-search when using the index in the HTTP Path:
-
-```
-GET test/_msearch
-{}
-{"query" : {"match_all" : {}}, "from" : 0, "size" : 10}
-```
-
-Bypass read permissions with `_msearch` (no index in the HTTP path):
+2. Bypass read permissions with `_msearch` (no index in the HTTP path):
 
 ```
 GET _msearch
-{"index" : "test"}
+{"index" : "twitter_blocked_index"}
 {"query" : {"match_all" : {}}}
 ```

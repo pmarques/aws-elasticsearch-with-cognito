@@ -150,9 +150,17 @@ Resources:
       PolicyDocument:
         Version: 2012-10-17
         Statement:
-          - Sid: DenySpecialRequests
+          # Left unprotected to prove a possible hack
+          # - Sid: DenySpecialRequests
+          #   Resource:
+          #     - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_bulk
+          #   Action:
+          #     - es:*
+          #   Effect: Deny
+          - Sid: DenyAnyAccessToSpecialIndexes
             Resource:
-              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_bulk
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/twitter_blocked_index
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/twitter_blocked_index/*
             Action:
               - es:*
             Effect: Deny
