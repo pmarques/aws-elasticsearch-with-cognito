@@ -481,3 +481,7 @@ Outputs:
   KibanaProjectB:
     Description: Project B Kibana URL
     Value: !Join ["", ["https://", !GetAtt ElasticsearchPrjectB.DomainEndpoint, "/_plugin/kibana/"]]
+
+  UserPollURL:
+    Description: User Pool Portal
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cognito/users/?region=${AWS::Region}#/pool/${UserPool}/users"
