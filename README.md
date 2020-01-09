@@ -36,6 +36,8 @@ Users in other groups can only read docs in their projects (current policy allow
 GET twitter/_doc/1
 ```
 
+---
+
 ## Findings
 
 Before discussing the findings, keep in mind Elasticsearch works like this:
@@ -48,31 +50,35 @@ At the time, 6th of January 2020:
 * AWS ES IAM Policies only allow us, as far as I know, to block requests based on the HTTP Path. That prevents someone to read, modify or create a document using the Document "CRUD" API.
 * Requests with the index in the HTTP Body bypass the IAM Policies, there is a way to disable this in the ES, although if we do that Kibana stops working because loads of operations are apparently using ES multisearch.
 * Since multisearch is required for Kibana we can't disable `_msearch`.
-* `_bulk` ES REST API can be used as a _"hack"_ for write requests.
+* `_bulk` ES REST API can be used as a _"hack"_ for write requests **so we need to be carefull and whitelist or blacklist this API(s)**
+    * To blacklist we can add a Deny statement for the `_bulk` requests (check IAM Policies for Project A in the CloudFormation template elastisearch.yaml)
+    * We can just white list the API(s) needed (check IAM Policies for Project B in the CloudFormation template elastisearch.yaml)
+    * *We can block for instance _bulk in the Cognito IAM Policy although we need to evaluate all the APIs to make sure that other "hacks" can't be used for at leasts to edit the data.*
 
-To block it, we can add a Deny statement for the `_bulk` requests (check IAM Policies for Project A in the CloudFormation template elastisearch.yaml)
-
-* I'm not entirely sure about the current implementation of beats and logstash, but they were using bulk request to index the logs and metrics which means that if we block this on ES we would probably break the log ingestion.
-* We can block for instance _bulk in the Cognito IAM Policy although we need to evaluate all the APIs to make sure that other "hacks" can't be used for at leasts to edit the data.
+* I'm not entirely sure about the current implementation of beats and logstash, but they were using bulk request to index the logs and metrics which means that if we disable this on ES we would probably break the log ingestion.
 
 Also:
 
-* AWS ES seems to white list the ES API, so explicit Denies in the IAM Policies are required to block this _"hacks"_.
 * AWS ES Service doesn't support cross cluster search so we can segregate data per AWS ES Domain.
 
-To show how you can bypass the IAM Polices, _Project B_ IAM Policy still allows `_bulk` requests. It also has a explicit **Deny** for a index named **twitter_blocked_index**
+To show how you can bypass the IAM Polices, _Project B_ IAM Policy has a explicit **Deny** for a index named **twitter_blocked_index**.
 
-Using _Kibana for Project B_ you can try the follow:
+_Kibana for Project B_ you can try the follow:
 
-1. Bypass write permissions with `_bulk` (no index in the HTTP path):
+1. Login with a user inside group **AdminGroup**
+2. Using the admin user you can create a doc in index **twitter_blocked_index**:
 
 ```
-POST _bulk
-{ "index" : { "_index" : "twitter_blocked_index", "_id" : "1" } }
-{ "field1" : "value1" }
+PUT twitter_blocked_index/_doc/1
+{
+    "user" : "kimchy",
+    "post_date" : "2009-11-15T14:12:12",
+    "message" : "trying out Elasticsearch"
+}
 ```
 
-2. Bypass read permissions with `_msearch` (no index in the HTTP path):
+3. Login with a user inside group **ProjectAGroup**
+4. Bypass read permissions with `_msearch` (no index in the HTTP path):
 
 ```
 GET _msearch

@@ -133,7 +133,6 @@ Resources:
             Effect: Allow
           - Sid: AllowKibanaReadWrite
             Resource:
-              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/favicon.ico
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/_*
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/.kibana*
@@ -150,13 +149,6 @@ Resources:
       PolicyDocument:
         Version: 2012-10-17
         Statement:
-          # Left unprotected to prove a possible hack
-          # - Sid: DenySpecialRequests
-          #   Resource:
-          #     - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_bulk
-          #   Action:
-          #     - es:*
-          #   Effect: Deny
           - Sid: DenyAnyAccessToSpecialIndexes
             Resource:
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/twitter_blocked_index
@@ -172,9 +164,11 @@ Resources:
             Effect: Allow
           - Sid: AllowKibanaReadWrite
             Resource:
-              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/favicon.ico
-              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_*
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_plugin/*
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_mget
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_msearch
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_mapping
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/.kibana*
             Action:
               - es:*
