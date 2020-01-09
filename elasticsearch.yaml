@@ -136,7 +136,7 @@ Resources:
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/favicon.ico
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/_*
-              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/.*
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-a/.kibana*
             Action:
               - es:*
             Effect: Allow
@@ -175,7 +175,7 @@ Resources:
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/favicon.ico
               - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/_*
-              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/.*
+              - !Sub arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}-proj-b/.kibana*
             Action:
               - es:*
             Effect: Allow
