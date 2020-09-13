@@ -53,7 +53,7 @@ Parameters:
 Conditions:
   HasSingleClusterInstance: !Equals [!Ref ClusterInstanceCount, '1']
   HasDedicatedMasterNodes: !Not [!Equals [!Ref DedicatedMasterCount, 0]]
-  HasEncryption: !Equals [!Ref Encryption, true]
+  HasEncryption: !Not [!Equals [!Ref Encryption, ""]]
 
 Resources:
   AdminRole:
