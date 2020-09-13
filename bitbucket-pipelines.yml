@@ -1,0 +1,25 @@
+---
+
+pipelines:
+  default:
+    - step: &yaml_linter
+        name: Run YAML linter
+        image: automationlogic/yamllint:1.13.0
+        script:
+          - yamllint --version
+          - >-
+            find . -not -path "./.git/*" -iregex ".*\.ya?ml" | xargs yamllint -d '{
+              extends: default,
+              rules: {
+                line-length: disable,
+                comments: {
+                  require-starting-space: true,
+                  min-spaces-from-content: 1
+                },
+                document-start: disable,
+                document-end: disable
+              }
+            }'
+
+...
+
