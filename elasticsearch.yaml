@@ -283,7 +283,7 @@ Resources:
     Properties:
       Handler: index.handler
       Runtime: nodejs12.x
-      # NOTE: This is completly open for the sake of a demo
+      # NOTE: This is completly open for the sake of a demo
       Policies:
         - Version: '2012-10-17' # Policy Document
           Statement:
