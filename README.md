@@ -2,7 +2,7 @@
 
 This is compact solution / template to show how you can configure AWS Elasticsearch with AWS Cognito and apply some restrictions.
 
-1. Create a CloudFormation Stack with elastisearch.yaml template (You can use the all the default settings but don't forget to tick the boxes in the bootem of the last step: `Capabilities and transforms`)
+1. Create a CloudFormation Stack with [elasticsearch.yaml](./elasticsearch.yaml) template (You can use the all the default settings but don't forget to tick the boxes in the bootem of the last step: `Capabilities and transforms`)
 2. Create users in the AWS Cognito User Pool console and assign one of the groups (**Note:** don't assign more than one group to a user or it will get access denied)
 3. Access Kibana (you can find the URL in the Outputs of the CloudFormation Stack)
 
